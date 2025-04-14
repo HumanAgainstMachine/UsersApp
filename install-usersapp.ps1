@@ -1,6 +1,7 @@
 <#
 .SYNOPSIS
     UsersApp installation script
+    
 .DESCRIPTION
     UsersApp is a PowerShell 7.1+ app composed by LocalUsers module and a separate GUI script.
     This script:
@@ -18,30 +19,45 @@ $baseUrl = "https://github.com/HumanAgainstMachine/UsersApp/releases/latest/down
 $usersAppPath = Join-Path $env:APPDATA "UsersApp"
 New-Item -ItemType Directory -Force -Path $usersAppPath | Out-Null
 
-# Run as admin test
-if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    Write-Warning "UsersApp needs to be installed as Administrator. Restarting with elevated privileges..."
+# Download this script 
+$thisScriptUrl = $baseUrl + "install-usersapp.ps1"
+$thisScriptPath = Join-Path $usersAppPath "install-usersapp.ps1"
+Invoke-WebRequest -Uri $thisScriptUrl -OutFile $thisScriptPath
 
-    # Download and launch this script as adiministrator
-    $thisScriptUrl = $baseUrl + "install-usersapp.ps1"
-    $thisScriptPath = Join-Path $usersAppPath "install-usersapp.ps1"
+$ps7Path = "C:\Program Files\PowerShell\7\pwsh.exe"
 
-    try {
-        Invoke-WebRequest -Uri $thisScriptUrl -OutFile $thisScriptPath
-        Start-Process pwsh.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$thisScriptPath`"" -Verb RunAs
-        Write-Host "`nRelaunch success" -ForegroundColor Green
+# Case PS5 is running
+if ($PSVersionTable.PSVersion.ToString().substring(0,1) -eq '5') {
+    
+    # PS7 installed test
+    if (-not (Test-Path -Path $ps7Path)) {
+
+        # install PS7.1+
+        if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+            Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$thisScriptPath`"" -Verb RunAs  
+            exit
+        }
+        Write-Host "Installing PowerShell 7..."
+    
+        $scriptPath = "$env:TEMP\install-powershell.ps1"
+        Invoke-WebRequest -Uri "https://aka.ms/install-powershell.ps1" -OutFile $scriptPath
+    
+        # Run system-wide silent install using MSI
+        & $scriptPath -UseMSI -Quiet
+        Write-Host "PowerShell 7 installed successfully."
     }
-    catch {
-        Write-Warning "`nRelaunch failed. Try again"
-    }
-    finally {
-        Write-Host "`nPress any key to close..."
-        $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") | Out-Null        
-        exit
-    }
+    write-host "Launch PS7"
+    Start-Process pwsh.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$thisScriptPath`"" -Verb RunAs
+    exit
 }
 
-# install/update PS7.1+
+if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    Start-Process pwsh.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$thisScriptPath`"" -Verb RunAs 
+    exit
+}
+
+
+# update PS7.1+
 $installedVersion = $PSVersionTable.PSVersion.ToString()
 
 $releasesUrl = "https://api.github.com/repos/PowerShell/PowerShell/releases/latest"
@@ -69,8 +85,7 @@ if ($installedVersion -ne $latestVersion) {
     Write-Host "PowerShell is already up to date."
 }
 
-# Path for PowerShell 7
-$ps7Path = "C:\Program Files\PowerShell\7\pwsh.exe"
+
 
 # Install/Update LocalUsers module
 if ($lUsers = Get-Module -ListAvailable -Name LocalUsers) {
@@ -96,9 +111,9 @@ if ($lUsers = Get-Module -ListAvailable -Name LocalUsers) {
     } else {
         Write-Host "Failed to install LocalUsers module. Please install manually." -ForegroundColor Red
     }
-}
+}    
 
-$usersAppUrl = $baseUrl + "UsersApp.ps1"
+$usersAppUrl = $baseUrl + "usersapp.ps1"
 
 # Create a script that the shortcut links to in order to prevent the shortcut from being flagged as a virus.
 $usersAppLaunchScript = @"
@@ -110,8 +125,8 @@ Set-Content -Path $usersAppLaunchScriptPath -Value $usersAppLaunchScript
 
 
 # Download icon
-$iconUrl = $baseUrl + "UsersApp.ico"
-$iconPath = Join-Path $usersAppPath "UsersApp.ico"
+$iconUrl = $baseUrl + "usersapp.ico"
+$iconPath = Join-Path $usersAppPath "usersapp.ico"
 
 try {
     Invoke-WebRequest -Uri $iconUrl -OutFile $iconPath
