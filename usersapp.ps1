@@ -9,13 +9,13 @@ Add-Type -AssemblyName System.Drawing
 
 # Create the main form
 $form = New-Object System.Windows.Forms.Form
-$form.Text = 'Local User Management'
-$form.Size = New-Object System.Drawing.Size(800,600)
+$form.Text = 'Users App'
+$form.Size = New-Object System.Drawing.Size(750,600)
 $form.StartPosition = 'CenterScreen'
 
 # Create DataGridView
 $userGrid = New-Object System.Windows.Forms.DataGridView
-$userGrid.Size = New-Object System.Drawing.Size(700,400)
+$userGrid.Size = New-Object System.Drawing.Size(653,420)
 $userGrid.Location = New-Object System.Drawing.Point(50,30)
 $userGrid.AllowUserToAddRows = $false
 $userGrid.AllowUserToDeleteRows = $false
@@ -27,78 +27,69 @@ $userGrid.ColumnHeadersDefaultCellStyle.SelectionBackColor = $userGrid.ColumnHea
 
 # Create columns
 $userGrid.Columns.Add("Username", "Username") | Out-Null
-$userGrid.Columns.Add("SID", "SID") | Out-Null
 $userGrid.Columns.Add("AccountSource", "AccountSource") | Out-Null
 $userGrid.Columns.Add("LocalPath", "LocalPath") | Out-Null
-$userGrid.Columns.Add("isAdmin", "isAdmin") | Out-Null
+$userGrid.Columns.Add("isAdmin", "Admn") | Out-Null
 
 # Set column widths
 $userGrid.Columns["Username"].Width = 130
-$userGrid.Columns["SID"].Width = 250
-$userGrid.Columns["AccountSource"].Width = 100
-$userGrid.Columns["LocalPath"].Width = 150
+$userGrid.Columns["AccountSource"].Width = 120
+$userGrid.Columns["LocalPath"].Width = 330
 $userGrid.Columns["isAdmin"].Width = 70
-
-# Create progress bar
-$progressBar = New-Object System.Windows.Forms.ProgressBar
-$progressBar.Location = New-Object System.Drawing.Point(50,440)
-$progressBar.Size = New-Object System.Drawing.Size(700,12)
-$progressBar.Style = 'Continuous'
 
 # Create Remove button and Backup checkbox with larger sizes
 $removeButton = New-Object System.Windows.Forms.Button
-$removeButton.Location = New-Object System.Drawing.Point(50,460)
-$removeButton.Size = New-Object System.Drawing.Size(120,23)  # Increased width
+$removeButton.Location = New-Object System.Drawing.Point(50,460) 
+$removeButton.Size = New-Object System.Drawing.Size(130,25)
 $removeButton.Text = 'Remove selected'
 
 $backupCheckbox = New-Object System.Windows.Forms.CheckBox
-$backupCheckbox.Location = New-Object System.Drawing.Point(180,463)
-$backupCheckbox.Size = New-Object System.Drawing.Size(100,23)  # Increased width
+$backupCheckbox.Location = New-Object System.Drawing.Point(185,463) 
+$backupCheckbox.Size = New-Object System.Drawing.Size(110,25)
 $backupCheckbox.Text = "and Backup"
 
 # Create horizontal separator line
 $separator = New-Object System.Windows.Forms.Label
-$separator.Location = New-Object System.Drawing.Point(50,490)
+$separator.Location = New-Object System.Drawing.Point(50,495) 
 $separator.Size = New-Object System.Drawing.Size(700,2)
 $separator.BorderStyle = [System.Windows.Forms.BorderStyle]::Fixed3D
 
 # Create new user controls
 $usernameLabel = New-Object System.Windows.Forms.Label
-$usernameLabel.Location = New-Object System.Drawing.Point(50,505)  # Moved down slightly
-$usernameLabel.Size = New-Object System.Drawing.Size(70,20)
+$usernameLabel.Location = New-Object System.Drawing.Point(50,505) 
+$usernameLabel.Size = New-Object System.Drawing.Size(75,20)
 $usernameLabel.Text = 'Username:'
 
 $usernameTextBox = New-Object System.Windows.Forms.TextBox
-$usernameTextBox.Location = New-Object System.Drawing.Point(120,505)  # Moved down slightly
+$usernameTextBox.Location = New-Object System.Drawing.Point(125,505) 
 $usernameTextBox.Size = New-Object System.Drawing.Size(150,20)
 
 $isAdminCheckbox = New-Object System.Windows.Forms.CheckBox
-$isAdminCheckbox.Location = New-Object System.Drawing.Point(280,505)  # Moved down slightly
-$isAdminCheckbox.Size = New-Object System.Drawing.Size(90,20)  # Increased width
-$isAdminCheckbox.Text = 'isAdmin'
+$isAdminCheckbox.Location = New-Object System.Drawing.Point(280,505) 
+$isAdminCheckbox.Size = New-Object System.Drawing.Size(90,20)
+$isAdminCheckbox.Text = 'isAdmin' # Internal text remains unchanged
 
 # Moved Create button and increased size
 $createButton = New-Object System.Windows.Forms.Button
-$createButton.Location = New-Object System.Drawing.Point(380,503)  # Moved down slightly
+$createButton.Location = New-Object System.Drawing.Point(380,503) 
 $createButton.Size = New-Object System.Drawing.Size(100,23)
 $createButton.Text = 'Create User'
 
 # Function to populate the grid
 function Update-UserGrid {
     $userGrid.Rows.Clear()
+    # Assuming Get-User, New-User, Remove-User are available in the scope
+    # Import-Module .\LocalUsers.psm1 -Force # Might be needed if functions are in a module
     $users = Get-User
     foreach ($user in $users) {
         $rowIndex = $userGrid.Rows.Add(
             $user.Username,
-            $user.SID,
             $user.AccountSource,
             $user.LocalPath,
             $(if ($user.isAdmin) { "Yes" } else { "No" })
         )
         $userGrid.Rows[$rowIndex].Tag = $user
     }
-    # Reset progress bar
-    $progressBar.Value = 0
 }
 
 # Add click handlers
@@ -108,49 +99,67 @@ $removeButton.Add_Click({
         return
     }
 
-    $progressBar.Maximum = $userGrid.SelectedRows.Count
-    $progressBar.Value = 0
-
     foreach ($row in $userGrid.SelectedRows) {
         $user = $row.Tag
+        # Basic check if Tag contains expected data
+        if ($null -eq $user -or -not $user.PSObject.Properties.Name.Contains('SID')) {
+             Write-Warning "Skipping row - user data or SID not found in Tag property."
+             continue
+        }
         $params = @{
-            SID = $user.SID
+            SID = $user.SID # Still need SID for removal logic
         }
         if ($backupCheckbox.Checked) {
             $params.Add('Backup', $true)
         }
 
-        Remove-User @params
+        # Add basic error handling for the core function
+        try {
+            Remove-User @params -ErrorAction Stop
+        } catch {
+            [System.Windows.Forms.MessageBox]::Show("Error removing user $($user.Username): $($_.Exception.Message)", "Removal Error")
+            # Decide whether to continue or stop on error
+            # return # Stop processing
+            continue # Continue with next selected user
+        }
 
-        $progressBar.Value += 1
-        $progressBar.Refresh()
-        [System.Windows.Forms.Application]::DoEvents()
+
+        [System.Windows.Forms.Application]::DoEvents() # Keep DoEvents to prevent GUI freeze during long operations
     }
 
     Update-UserGrid
 })
 
 $createButton.Add_Click({
-    if ($usernameTextBox.Text) {
+    $newUsername = $usernameTextBox.Text.Trim() # Trim whitespace
+    if ($newUsername) { # Check if not empty after trimming
         $params = @{
-            Name = $usernameTextBox.Text
+            Name = $newUsername
         }
         if ($isAdminCheckbox.Checked) {
             $params.Add('isAdmin', $true)
         }
 
-        New-User @params
-        Update-UserGrid
+        # Add basic error handling for the core function
+        try {
+            New-User @params -ErrorAction Stop
+            Update-UserGrid
 
-        $usernameTextBox.Text = ''
-        $isAdminCheckbox.Checked = $false
+            $usernameTextBox.Text = ''
+            $isAdminCheckbox.Checked = $false
+        } catch {
+             [System.Windows.Forms.MessageBox]::Show("Error creating user $($newUsername): $($_.Exception.Message)", "Creation Error")
+        }
+
+    } else {
+         [System.Windows.Forms.MessageBox]::Show("Username cannot be empty.", "Input Error")
+         $usernameTextBox.Focus()
     }
 })
 
 # Add all controls to the form
 $form.Controls.AddRange(@(
     $userGrid,
-    $progressBar,
     $removeButton,
     $backupCheckbox,
     $separator,
@@ -161,7 +170,18 @@ $form.Controls.AddRange(@(
 ))
 
 # Initial population of the grid
-Update-UserGrid
+try {
+    Update-UserGrid -ErrorAction Stop
+} catch {
+     [System.Windows.Forms.MessageBox]::Show("Error loading initial user list: $($_.Exception.Message)", "Loading Error")
+}
+
 
 # Show the form
-$form.ShowDialog()
+# Using try/finally ensures Dispose is called even if ShowDialog errors
+try {
+    $form.ShowDialog()
+}
+finally {
+    $form.Dispose()
+}
