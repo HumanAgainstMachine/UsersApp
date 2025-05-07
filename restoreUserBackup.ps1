@@ -1,14 +1,11 @@
 # User Profile Migration Script
-# This script checks if a folder with name starting with "${env:USERNAME}_" exists
-# If it exists, it copies all content to user profile directory and deletes the source folder
-# If it doesn't exist, the script exits silently
 
-# Get current directory where script is running
-$currentDir = Get-Location
+# Get path to profile backups
+$backupDir = (Split-Path -Qualifier $env:windir) + "\UsersApp\backups"
 
 # Look for folders that start with the current username followed by underscore
 $folderPattern = "${env:USERNAME}_*"
-$sourceFolder = Get-ChildItem -Path $currentDir -Directory -Filter $folderPattern | Select-Object -First 1
+$sourceFolder = Get-ChildItem -Path $backupDir -Directory -Filter $folderPattern | Select-Object -First 1
 
 # If a matching folder is found, proceed with copying
 if ($sourceFolder) {
@@ -27,7 +24,7 @@ if ($sourceFolder) {
     # /IF - Ignore failures
     # /NP - No progress
     # /NFL - No file list
-    $robocopyResult = robocopy $sourcePath $destinationPath /E /COPY:DAT /R:1 /W:1 /MT:8 /XJ /B /ZB /IF /NP /NFL
+     & robocopy $sourcePath $destinationPath /E /COPY:DAT /XJ /R:1 /W:1 /IF /NP /NFL | Out-Null
     
     # Delete the source folder after successful copy
     Remove-Item -Path $sourcePath -Recurse -Force
